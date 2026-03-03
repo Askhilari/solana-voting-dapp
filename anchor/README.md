@@ -1,76 +1,71 @@
 # Anchor Vault Program
 
-This template includes a simple SOL vault program built with [Anchor](https://www.anchor-lang.com/).
+This template includes a simple SOL voting program built with [Anchor](https://www.anchor-lang.com/) and [LiteSVM] (https://www.litesvm.com/)
 
-## Pre-deployed Program
+## Running the Program
 
-The vault program is deployed on **devnet** at:
+The voting program can be tested on the cli itself. In the lib.rs folder you have all the instructions and accounts that you need to Vote.
+The initialize sets up the poll with all poll parameters, candidate_initialize lists the candidate name and votes and the vote account increments vote by 1 everytime we select the candidate name.
 
+## Interacting with program
+
+```bash
+anchor build
 ```
-F4jZpgbtTb6RWNWq6v35fUeiAsRJMrDczVPv9U23yXjB
+This command builds the program and gives errors that can occur when building the program. Once the build succeeds we can test the instructions using liteSVM. The way we use these tests are. We have a struct (similar to #[accounts] data from lib.rs), then we need a get discriminator which takes the inputs of all our values and converts to bytes and outputs u8 array with bytes.
+
+Then we need to find the program derived address (PDA) of the program. This is the assigned to our program so that the state is saved and we don't reset the program everytime we initialize. To find the PDA we need a seed and program id. The program id is same for both, but for poll account we use poll_id as our seed and for candidate account we use poll_id + candidate_name as our seed. The inputes are converted to bytes and passed.
+
+When using liteSVM we need instructions when testing our program. In the Instruction we pass the functions like inititalize, candidate_initialize and vote which we need to test. Calling instructions is similar for all cases. We get the PDA using our find_program_address fuctions from above. Then we call discriminator and we create instruction_data vec which takes the discriminator + poll_id bytes + poll_id length + description bytes + description lenght + ... . Here we are basically appending to instruction_data vec the parameters that our function takes as input.
+
+Once everything is appended, we can put it in Instruction:
+Instruction {
+            program_id: *program_id,
+            accounts: vec![
+                AccountMeta::new(vote_pda, false),
+                AccountMeta::new(*payer, true),
+                AccountMeta::new_readonly(system_program::id(), false),
+            ],
+            data: instruction_data,
+        }
+This is our output, Instruction has 3 parameters, program id, accounts (This takes our pda, payer and system_program) we pass after each account whether it is signer (true or false) and it takes out instruction_data vec for our data parameter.
+
+
+Then under #[test] we call the behaviour that we need to test. We use deserialize fucntion to get the actual inputs and upon tested candidate_initialize we can see that vote feature works and gets incremented.
+
+## Testing the functions
+
+Install dependencies
+
+```bash
+cargo add litesvm
+cargo add borsh
+cargo add sha2
 ```
 
-You can interact with it immediately by connecting your wallet to devnet.
+Running tests
 
-## Deploying Your Own Program
+```bash
+cargo test
+```
 
-To deploy your own version of the program:
+Or if you want to test individual tests you can do!
 
-### 1. Generate a new program keypair
+```bash
+cargo test candidate_initialize -- --nocapture
+```
+
+-- --nocapture lets you display all the println! statements from code.
+
+If you get payer error you will have to generate a payer keypair.
 
 ```bash
 cd anchor
-solana-keygen new -o target/deploy/vault-keypair.json
+solana-keygen new -o target/deploy/voting-keypair.json
 ```
-
-### 2. Get the new program ID
 
 ```bash
-solana address -k target/deploy/vault-keypair.json
+solana address -k target/deploy/voting-keypair.json
 ```
 
-### 3. Update the program ID
-
-Update the program ID in these files:
-
-- `anchor/Anchor.toml` - Update `vault = "..."` under `[programs.devnet]`
-- `anchor/programs/vault/src/lib.rs` - Update `declare_id!("...")`
-
-### 4. Build and deploy
-
-```bash
-# Build the program
-anchor build
-
-# Get devnet SOL for deployment (~2 SOL needed)
-solana airdrop 2 --url devnet
-
-# Deploy to devnet
-anchor deploy --provider.cluster devnet
-```
-
-### 5. Regenerate the TypeScript client
-
-```bash
-cd ..
-npm run codama:js
-```
-
-This updates the generated client code in `app/generated/vault/` with your new program ID.
-
-## Program Overview
-
-The vault program allows users to:
-
-- **Deposit**: Send SOL to a personal vault PDA (Program Derived Address)
-- **Withdraw**: Retrieve all SOL from your vault
-
-Each user gets their own vault derived from their wallet address.
-
-## Testing
-
-Run the Anchor tests:
-
-```bash
-anchor test --skip-deploy
-```
+This program is a basic demonstration of voting dapp using solana and it lets you test the functions that you will deploy and attach to the frontend.
